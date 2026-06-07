@@ -1,0 +1,55 @@
+<?php
+require_once 'auth.php';
+require_once '../config.php';
+
+$empresaId = $_SESSION['empresa_id'];
+
+$id = $_POST['id'] ?? '';
+$dataLista = trim($_POST['data_lista'] ?? '');
+$nome = trim($_POST['nome'] ?? '');
+$status = $_POST['status'] ?? 'em andamento';
+$resumo = trim($_POST['resumo'] ?? '');
+$orgaos = $_POST['orgaos'] ?? [];
+
+if (!$dataLista || !$nome) {
+    die('Preencha os campos obrigatórios.');
+}
+
+if ($id) {
+    $stmt = $pdo->prepare("
+        UPDATE processos
+        SET data_lista = ?, nome = ?, status = ?, resumo = ?, atualizado_em = NOW()
+        WHERE id = ? AND empresa_id = ?
+    ");
+    $stmt->execute([$dataLista, $nome, $status, $resumo, $id, $empresaId]);
+    $processoId = $id;
+
+    $stmt = $pdo->prepare("DELETE FROM orgaos WHERE processo_id = ?");
+    $stmt->execute([$processoId]);
+} else {
+    $stmt = $pdo->prepare("
+        INSERT INTO processos (empresa_id, data_lista, nome, status, resumo, atualizado_em)
+        VALUES (?, ?, ?, ?, ?, NOW())
+    ");
+    $stmt->execute([$empresaId, $dataLista, $nome, $status, $resumo]);
+    $processoId = $pdo->lastInsertId();
+}
+
+$stmtOrgao = $pdo->prepare("
+    INSERT INTO orgaos (processo_id, nome, status, descricao, ordem)
+    VALUES (?, ?, ?, ?, ?)
+");
+
+foreach ($orgaos as $orgao) {
+    $stmtOrgao->execute([
+        $processoId,
+        trim($orgao['nome'] ?? ''),
+        trim($orgao['status'] ?? ''),
+        trim($orgao['descricao'] ?? ''),
+        (int)($orgao['ordem'] ?? 0)
+    ]);
+}
+
+header('Location: dashboard.php?id=' . $processoId);
+exit;
+?>
